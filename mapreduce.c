@@ -7,12 +7,11 @@
 #include <semaphore.h>
 #include "mapreduce.h"
 
-// Data Structure: Linked List of Linked Lists
-
 struct pair {
     char *key;
     char *value;
     struct pair *next;
+    int proc_thread = 0; // to keep track if processed
 };
 
 struct reduce_stuff {
@@ -25,7 +24,11 @@ struct partition_stuff {
     struct pair *head;
 };
 
-struct partition_stuff *p;
+Partioner p;
+int NUM_PART;
+
+partition_stuff *partition_array;
+
 
 // Gets the next value that will be used in user Reduce
 char* get_next(char *key, int partition_number){
@@ -33,10 +36,14 @@ char* get_next(char *key, int partition_number){
     current_pair = p[partition_number].head;
 
     while (current_pair != NULL) {
-        // Return the value with the key found
-        if (current_pair->key == key) {
-            if (current_pair->next != NULL) {
-                return current_pair->next->value;
+        if (current_pair->proc_thread == 0) {
+            // Return the value with the key found
+            if (current_pair->key == key) {
+                if (current_pair->next != NULL) {                
+                    // set it to processed
+                    current_pair->proc_thread = 1;
+                    return current_pair->next->value;
+                }
             }
         }
         current_pair = current_pair->next;
@@ -49,10 +56,9 @@ void MR_Emit(char *key, char *value){
 }
 
 
-// void reducer_run(struct reducer_arg) {
-//     reducer_arg.reduce(reducer_arg.key, )
+// void reducer_run(*partition) {
+//
 // }
-
 
 void MR_Run(int argc, char *argv[], 
         Mapper map, int num_mappers, 
@@ -66,6 +72,14 @@ void MR_Run(int argc, char *argv[],
     
     pthread_t mapper_thread[num_mappers];
     pthread_t reducer_thread[num_reducers];
+    p = partition;
+    NUM_PART = num_partitions;
+    
+    partition_array = malloc(num_partitions * sizeof(partition_stuff));
+
+    for (int i = 0; i < num_partitions; i++) {
+        partition_array[i].head = NULL;
+    }
 
     // To create mapper threads
     for (int i = 0; i < num_mappers; i++) {
@@ -76,21 +90,31 @@ void MR_Run(int argc, char *argv[],
         pthread_join(&mapper_thread[i], NULL);
     }
 
-    // struct reduce_stuff;
+    // MERGE SORT or qsort or any sort with nlogn complexity
+
+    // struct reduce_info;
 
     // To create reducer threads
     for (int i = 0; i < num_reducers; i++) {
         pthread_create(&reducer_thread[i], NULL, reduce, NULL);
-        // pthread_create(&reducer_thread[i], NULL, reducer_run, reducer_args);
+        // pthread_create(&reducer_thread[i], NULL, reducer_run, reduce_info);
     }
     // To join reducer threads
     for (int i = 0; i < num_reducers; i++) {
         pthread_join(&reducer_thread[i], NULL);
     }
+
+    // freeee me !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 }
 
 unsigned long MR_SortedPartition(char *key, int num_partitions) {
-    return 0;
+    char sort[4];
+    char *pointer;
+
+    strncpy(sort, key, 4);
+
+    // Change strtoul !!!!!!!!!!!!!!!!!
+    return strtoul(sort, &pointer, 36);
 }
 
 unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
