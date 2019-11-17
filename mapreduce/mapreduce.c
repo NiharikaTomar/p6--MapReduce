@@ -141,8 +141,6 @@ void MR_Run(int argc, char *argv[],
 
     partition_array = malloc(num_partitions * sizeof(struct map_keyvals));
     file_array = malloc((argc-1) * sizeof (struct files));
-
-    int reducer_array[num_reducers];
     
     part = partition;
     mapp = map;
@@ -150,8 +148,6 @@ void MR_Run(int argc, char *argv[],
     NUM_PART = num_partitions;
     total_files = argc - 1;
     amt_files = 0;
-
-    // INITIALIZE SHIT -------------------------------------------------------    
 
     pthread_t mapper_thread[num_mappers];
     pthread_t reducer_thread[num_reducers];
@@ -172,7 +168,7 @@ void MR_Run(int argc, char *argv[],
 
     // To create reducer threads
     for (int i = 0; i < num_reducers; i++) {
-        pthread_create(&reducer_thread[i], NULL, reducer_run, &reducer_array[i]);
+        pthread_create(&reducer_thread[i], NULL, reducer_run, NULL);
     }
     // To join reducer threads
     for (int i = 0; i < num_reducers; i++) {
