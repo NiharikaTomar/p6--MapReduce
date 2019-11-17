@@ -137,8 +137,6 @@ void MR_Run(int argc, char *argv[],
     p.mapped_keyvals_amount = malloc(num_partitions * sizeof(int));
     p.mapped_p = malloc(num_partitions * sizeof(int));
 
-    p.processed_times = 0;
-
     partition_array = malloc(num_partitions * sizeof(struct map_keyvals));
     file_array = malloc((argc-1) * sizeof (struct files));
 
@@ -150,8 +148,14 @@ void MR_Run(int argc, char *argv[],
     NUM_PART = num_partitions;
     total_files = argc - 1;
     amt_files = 0;
+    p.processed_times = 0;
 
-    // INITIALIZE SHIT -------------------------------------------------------    
+    for (int i = 0; i < num_reducers; i++) {
+        reducer_array[i] = i;
+        partition_array[i] = malloc(sizeof(struct map_keyvals) * 512);
+        p.mapped_keyvals_amount[i] = 0;
+        p.mapped_p[i] = 512;
+    }   
 
     pthread_t mapper_thread[num_mappers];
     pthread_t reducer_thread[num_reducers];
@@ -185,12 +189,18 @@ void MR_Run(int argc, char *argv[],
 }
 
 unsigned long MR_SortedPartition(char *key, int num_partitions) {
+
+    if (num_partitions == 1) {
+        return 0;
+    }
+
     char sort[4];
     char *pointer;
 
     strncpy(sort, key, 4);
 
-    // Change strtoul !!!!!!!!!!!!!!!!!
+    
+
     return strtoul(sort, &pointer, 36);
 }
 

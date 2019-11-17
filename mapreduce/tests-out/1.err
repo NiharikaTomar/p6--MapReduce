@@ -1,2 +1,0 @@
-sort: sort.c:11: Map: Assertion `fp != NULL' failed.
-../tester/run-tests.sh: line 57: 16226 Aborted                 (core dumped) ./sort tests/5.txt 1 1 1
