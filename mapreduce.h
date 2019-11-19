@@ -18,5 +18,5 @@ void MR_Run(int argc, char *argv[],
 	    Mapper map, int num_mappers, 
 	    Reducer reduce, int num_reducers, 
 	    Partitioner partition, int num_partitions);
-
+		
 #endif // __mapreduce_h__
