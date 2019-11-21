@@ -1,2 +1,2 @@
 timeout: the monitored command dumped core
-../tester/run-tests.sh: line 57: 21341 Segmentation fault      timeout 60 ./sort tests/1.txt tests/2.txt tests/3.txt 3 1 4
+../tester/run-tests.sh: line 57: 12836 Segmentation fault      timeout 60 ./sort tests/1.txt tests/2.txt tests/3.txt 3 1 4

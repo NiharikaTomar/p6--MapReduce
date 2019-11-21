@@ -5,20 +5,14 @@
 #include <string.h>
 #include <sys/types.h>
 #include "mapreduce.h"
-#include <math.h>
 #include "map.h"
 
 pthread_mutex_t f_lock;
 pthread_mutex_t lock;
-pthread_key_t glob_var_key;
+pthread_key_t thread_key;
 
 typedef struct partition_info {
     struct k_v_pair *head;
-    int *next;
-    // int total_files;
-    // int check_next;
-    // int p_num;
-    // int files_processed;
 } partition_info;
 
 struct k_v_pair {
@@ -27,53 +21,32 @@ struct k_v_pair {
     struct k_v_pair *next;
 };
 
-// typedef struct files {
-  int total_files;
-  int check_next;
-  int p_num;
-  int files_processed;
-// } files;
+// in map.h
+int total_files;
+int check_next;
+int p_num;
+int files_processed;
 
 Partitioner p;
 Reducer r;
 Mapper m;
 
 char** FILES;
-// struct files *fileName;
 struct partition_info *partitions;
 
 
 // Gets the next value that will be used in user Reduce
 char* get_next(char *key, int partition_number) {
-    struct k_v_pair *curr_partition = partitions[partition_number].head;
-    // need to check if next value is different
 
     pthread_mutex_lock(&lock);
-    if (partitions->next[partition_number] == 1) {
-        // reset key to 0
-        partitions->next[partition_number] = 0;
-        pthread_mutex_unlock(&lock);
-        return NULL;
-    }
+    struct k_v_pair *curr_partition = partitions[partition_number].head;
 
     if (curr_partition != NULL) {
         if (strcmp(curr_partition->key, key) == 0) {
             partitions[partition_number].head = curr_partition->next;
-            if (curr_partition->next != NULL) {
-                // if not 0, we have a new value
-                if (strcmp(curr_partition->next->key, key) != 0){
-                    // set flag to 1
-                    partitions->next[partition_number] = 1;
-                    pthread_mutex_unlock(&lock);
-                    return curr_partition->value;
-                }
-                pthread_mutex_unlock(&lock);
-                return curr_partition->value;
 
-            }else {
-                pthread_mutex_unlock(&lock);
-                return curr_partition->value;
-            }
+            pthread_mutex_unlock(&lock);
+            return curr_partition->value;
         }
     }
     pthread_mutex_unlock(&lock);
@@ -185,11 +158,11 @@ void* reducer_run() {
         struct k_v_pair *iterator =  partitions[check_next].head;
         int *p = malloc(sizeof(int));
         *p = check_next;
-        pthread_setspecific(glob_var_key, p);
+        pthread_setspecific(thread_key, p);
         check_next++;
         pthread_mutex_unlock(&f_lock);
 
-        int* glob_spec_var = pthread_getspecific(glob_var_key);
+        int* glob_spec_var = pthread_getspecific(thread_key);
         while(iterator != NULL)
         {
             r(iterator->key, get_next, *glob_spec_var);
@@ -212,11 +185,11 @@ void MR_Run(int argc, char *argv[],
     p_num = num_partitions;
     total_files = argc - 1;
     partitions = malloc(num_partitions * sizeof(struct partition_info));
-    partitions->next = malloc(num_partitions* sizeof(int));
-
-    for (int i = 0; i < num_partitions; i++) {
-      partitions->next[i] = 0;
-    }
+    // partitions->next = malloc(num_partitions* sizeof(int));
+    //
+    // for (int i = 0; i < num_partitions; i++) {
+    //   partitions->next[i] = 0;
+    // }
     FILES = &argv[1];
 
     pthread_t mapper_thread[num_mappers];
@@ -236,7 +209,7 @@ void MR_Run(int argc, char *argv[],
         pthread_join(mapper_thread[i], NULL);
     }
 
-     pthread_key_create(&glob_var_key,NULL);
+     pthread_key_create(&thread_key,NULL);
     for (int i = 0; i < num_reducers; i++) {
         pthread_create(&reducer_thread[i], NULL, reducer_run, NULL);
         // pthread_create(&reducer_thread[i], NULL, reducer_run, &reducer_array[i]);
@@ -308,4 +281,3 @@ unsigned long MR_DefaultHashPartition(char *key, int num_partitions)
         hash = hash * 33 + c;
     return hash % num_partitions;
 }
-
