@@ -5,7 +5,6 @@
 #include <string.h>
 #include <sys/types.h>
 #include "mapreduce.h"
-#include "map.h"
 
 pthread_mutex_t f_lock;
 pthread_mutex_t lock;
@@ -21,7 +20,15 @@ struct k_v_pair {
     struct k_v_pair *next;
 };
 
-// in map.h
+struct partition_info *partitions;
+
+// struct files {
+//     char *file_name;
+// };
+// struct files *file_array;
+
+char** file_array;
+
 int total_files;
 int check_next;
 int p_num;
@@ -31,17 +38,11 @@ Partitioner p;
 Reducer r;
 Mapper m;
 
-char** FILES;
-struct partition_info *partitions;
-
-
 // Gets the next value that will be used in user Reduce
 char* get_next(char *key, int partition_number) {
 
     pthread_mutex_lock(&lock);
-
     struct k_v_pair *pair = partitions[partition_number].head;
-
     if (pair != NULL) {
         if (strcmp(pair->key, key) == 0) {
             partitions[partition_number].head = pair->next;
@@ -55,14 +56,10 @@ char* get_next(char *key, int partition_number) {
 
 
 void MR_Emit(char *key, char *value) {
-    if (strlen(key) == 0) {
-        return;
-    }
-
-    int hashIndex = p(key, p_num);
+    int hashIndex =  p(key, p_num);
     struct k_v_pair *pair =  partitions[hashIndex].head;
     struct k_v_pair *new = malloc(sizeof(struct k_v_pair));
-    new->key = malloc(sizeof(char)*(strlen(key) + 1));
+    new->key = malloc(sizeof(char)*(strlen(key)));
     strcpy(new->key, key);
     new->value = value;
 
@@ -90,7 +87,6 @@ void MR_Emit(char *key, char *value) {
                 pthread_mutex_unlock(&lock);
                 return;
             }
-
         }
         prev = iterator;
         iterator = iterator->next;
@@ -102,81 +98,56 @@ void MR_Emit(char *key, char *value) {
 
 // Wrapper for Mapper
 void* mapper_run() {
-    while (1)
-    {
-        char* curr_filename;
-        pthread_mutex_lock(&f_lock);
-
-        if(total_files <= files_processed){
+    for (;;) {
+        if (total_files > files_processed) {
+            // char* cf;
+            pthread_mutex_lock(&f_lock);
+            char *cf = file_array[files_processed];
+            // char *cf = file_array[files_processed].file_name;
+            files_processed++;
             pthread_mutex_unlock(&f_lock);
+            m(cf);
+        } else {
             return NULL;
         }
-        curr_filename = FILES[files_processed];
-        files_processed++;
-        pthread_mutex_unlock(&f_lock);
-        m(curr_filename);
     }
 }
 
 // Wrapper for Reducer
-// void* reducer_run(void *st) {
-//
-//     char **args = (char **) st;
-//     while (1) {
-//         pthread_mutex_lock(&f_lock);
-//         // files.check_next++;
-//         int x;
-//         if(files.files_processed<=files.total_files){
-//             x=files.files_processed;
-//             files.files_processed++;
-//         }
-//         pthread_mutex_unlock(&f_lock);
-//
-//         r(args[x], get_next, files.p_num);
-//     }
-//
-//     return st;
-// void* reducer_run(void *start) {
-//     int i = 0;
-//     while (i < partition.mapped_keyvals_amount[*(int *) start]) {
-//         // if (partition.processed_times[*(int *) start] == i) {
-//             // Call reducer on the partitions
-//             r(partition_array[*(int *) start][i].key, get_next, *(int *)  start);
-//         // }
-//         i++;
-//     }
-//     return start;
 void* reducer_run() {
     for (;;) {
         pthread_mutex_lock(&f_lock);
-        if (p_num <= check_next){
-            pthread_mutex_unlock(&f_lock);
-            return NULL;
-        }
 
+        if (p_num > check_next) {
+          struct k_v_pair *iterator =  partitions[check_next].head;
+          int *p = malloc(sizeof(int));
+          *p = check_next;
+          pthread_setspecific(thread_key, p);
+          // void *pointer = malloc(sizeof(long));
+          // pointer = &check_next;
+          // pthread_setspecific(thread_key, pointer);
+          check_next++;
+          pthread_mutex_unlock(&f_lock);
 
-        struct k_v_pair *iterator =  partitions[check_next].head;
-        int *p = malloc(sizeof(int));
-        *p = check_next;
-        pthread_setspecific(thread_key, p);
-        check_next++;
-        pthread_mutex_unlock(&f_lock);
-
-        int* glob_spec_var = pthread_getspecific(thread_key);
-        while(iterator != NULL)
-        {
-            r(iterator->key, get_next, *glob_spec_var);
-            iterator = partitions[*glob_spec_var].head;
+          int* glob_spec_var = pthread_getspecific(thread_key);
+          while(iterator != NULL) {
+              r(iterator->key, get_next, *glob_spec_var);
+              iterator = partitions[*glob_spec_var].head;
+          }
+        } else {
+          pthread_mutex_unlock(&f_lock);
+          return NULL;
         }
     }
 }
-
-
 
 void MR_Run(int argc, char *argv[],
         Mapper map, int num_mappers,
         Reducer reduce, int num_reducers,
         Partitioner partition, int num_partitions) {
+
+    pthread_t mapper_thread[num_mappers];
+    pthread_t reducer_thread[num_reducers];
 
     p = partition;
     m = map;
@@ -185,20 +156,12 @@ void MR_Run(int argc, char *argv[],
     p_num = num_partitions;
     total_files = argc - 1;
     partitions = malloc(num_partitions * sizeof(struct partition_info));
-    // partitions->next = malloc(num_partitions* sizeof(int));
-    //
-    // for (int i = 0; i < num_partitions; i++) {
-    //   partitions->next[i] = 0;
-    // }
-    FILES = &argv[1];
 
-    pthread_t mapper_thread[num_mappers];
-    pthread_t reducer_thread[num_reducers];
-
-    // int reducer_array[num_reducers];
-    //
-    // for (int i = 0; i < num_reducers; i++) {
-    //     reducer_array[i] = i;
+    file_array = &argv[1];
+    // file_array = malloc(total_files * sizeof (struct files));
+    // for (int i = 0; i < total_files; i++) {
+    //     file_array[i].file_name = malloc(strlen(argv[i+1] + 1) * sizeof(char));
+    //     strcpy(file_array[i].file_name, argv[i+1]);
     // }
 
     for (int i = 0; i < num_mappers; i++) {
@@ -209,11 +172,10 @@ void MR_Run(int argc, char *argv[],
         pthread_join(mapper_thread[i], NULL);
     }
 
-     pthread_key_create(&thread_key,NULL);
+    pthread_key_create(&thread_key,NULL);
+
     for (int i = 0; i < num_reducers; i++) {
         pthread_create(&reducer_thread[i], NULL, reducer_run, NULL);
-        // pthread_create(&reducer_thread[i], NULL, reducer_run, &reducer_array[i]);
-        // pthread_create(&reducer_thread[i], NULL, reducer_run, (void *) i);
     }
 
     for (int i = 0; i < num_reducers; i++) {
@@ -228,15 +190,28 @@ unsigned long MR_SortedPartition(char *key, int num_partitions) {
         return 0;
     }
 
-    char sort[4];
-    char *pointer;
+    // char sort[4];
+    // char *pointer;
+    //
+    // strncpy(sort, key, 4);
+    // return strtoul(sort, &pointer, 36);
 
-    strncpy(sort, key, 4);
+    // VERSION 2 -------------------------------------------------
+    unsigned long res = 0;
+    for(int i = 0; i < 4; i++) {
+  		res <<= 8;// shift the long 8 bits left
+  		res += key[i]; // append the next character to our return long
+  	}
 
+    int i;
+    for(i = num_partitions; i >= 2; i--){
+        num_partitions /= 2;
+    }
+    int sigbits = i;
+    int shift = 32 - sigbits;
+    return res >> shift;
 
-    // unsigned long sorted;
-    // sorted =
-    return strtoul(sort, &pointer, 36);
+    // VERSION 3 -----------------------------------------------
     // sorted = sorted & 0x0FFFFFFFF;// masking
     // // int num_bits_needed;
     // // num_bits_needed = log2(num_partitions);
@@ -245,36 +220,10 @@ unsigned long MR_SortedPartition(char *key, int num_partitions) {
     // sorted = sorted >> (bits); // shifting msb
     //
     // return sorted;
-    // int i;
-    // for(i = num_partitions; i >= 2; i--){
-    //     num_partitions /= 2;
-    // }
-
-    // int bit_off = i;
-    // unsigned long bits_to_comp = 0;
-
-    // // looking at first 4 bits of key
-    // for(int j = 0; j < 4; j++) {
-    //     // left bit shifting
-	// 	bits_to_comp = bits_to_comp << 8;
-    //     // appending the next character to key to compare
-	// 	bits_to_comp = key[j] + bits_to_comp;
-    // }
-
-    // int k;
-    // for(k = bits_to_comp; k >= 2; k--){
-    //     bits_to_comp /= 2;
-    // }
-
-    // int bit_off2 = k;
-    // int result = bit_off2 - (bit_off - 1);
-
-    // return bits_to_comp >> result;
 }
 
 
-unsigned long MR_DefaultHashPartition(char *key, int num_partitions)
-{
+unsigned long MR_DefaultHashPartition(char *key, int num_partitions) {
     unsigned long hash = 5381;
     int c;
     while ((c = *key++) != '\0')
