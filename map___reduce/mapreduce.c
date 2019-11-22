@@ -83,16 +83,21 @@ void MR_Emit(char *key, char *value) {
                     pair_to_create->next = pair;
                 if (prev != NULL){
                     prev->next = pair_to_create;
+                    // pair_to_create->next = pair;
+                    // pthread_mutex_unlock(&lock);
+                    // return;
                 } else {
                     partitions[p(key, p_num)].head = pair_to_create;
+                    
                 }
                 pthread_mutex_unlock(&lock);
-                return;
+                    return;
             }
             prev = pair;
             pair = pair->next;
         }
         prev->next = pair_to_create;
+        // pair_to_create->next = NULL;
         pthread_mutex_unlock(&lock);
     }
 }
