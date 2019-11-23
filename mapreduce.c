@@ -134,15 +134,15 @@ void* reducer_run() {
             *pointer = check_next;
             // Specified the link on top of the file (right after Copyright)
             // with explanation of usage (found online).
-            pthread_setspecific(thread_key, <void *>pointer);
+            pthread_setspecific(thread_key, (void *)pointer);
             check_next++;
             pthread_mutex_unlock(&f_lock);
 
             // Specified the link on top of the file (right after Copyright)
             // with explanation of usage (found online).
             while (pair != NULL) {
-                r(pair->key, get_next, *<int *>pthread_getspecific(thread_key));
-                pair = partitions[*<int *>pthread_getspecific(thread_key)].head;
+                r(pair->key, get_next, *(int *)pthread_getspecific(thread_key));
+                pair = partitions[*(int *)pthread_getspecific(thread_key)].head;
             }
             // Free dynamically allocated memory
             free(pointer);
